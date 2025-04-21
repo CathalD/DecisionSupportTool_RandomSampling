@@ -1,2 +1,4 @@
-# DecisionSupportTool_RandomSampling
-This tool helps users implement a random sampling design within a defined boundary of any area of interest. Users can choose to draw a geometric feature or upload a shapefile
+# Sample Allocation and Distribution Tool
+These tools helps users implement a sampling design within a defined boundary of any area of interest using Google Earth Engine
+
+For Random and Systematic sampling strategies,  
