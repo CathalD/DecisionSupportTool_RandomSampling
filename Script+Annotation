@@ -1,0 +1,679 @@
+// As of April 21, 2025
+// This is the code used to run the app, including analysis and user interface
+
+// Import prior data
+
+// Step 1: import Carbon Map data  
+var ch = ee.ImageCollection("projects/sat-io/open-datasets/carbon_stocks_ca/ch"),
+    fc = ee.ImageCollection("projects/sat-io/open-datasets/carbon_stocks_ca/fc"),
+    sc = ee.ImageCollection("projects/sat-io/open-datasets/carbon_stocks_ca/sc"),
+    scc = ee.ImageCollection("projects/sat-io/open-datasets/carbon_stocks_ca/scc");
+
+// Define your datasets
+var palettes = require('users/gena/packages:palettes');
+//Set forest carbon as variable "dem" and value of cell "demVis"
+// define varaibles to calculate mean, std, etc
+var forestc = fc.first();
+//mask null values from forest
+var soilcarbon = sc.first();
+var soilVis = {bands: 'b1', min: 6.5, max: 327};
+var palettesc = palettes.colorbrewer.Purples[5];
+var palettefc = palettes.colorbrewer.Greens[5];
+    
+
+
+
+
+//Input intro Panel
+
+function panelcreate() {
+    // Create an intro panel with labels.
+    var intro = ui.Panel([
+        ui.Label({
+            value: 'Random Sampling - Decision Support Tool',
+            style: {
+                fontSize: '1.4vw',
+                fontWeight: 'bold'
+            },
+        }),
+        ui.Label({
+            value: 'This tool helps users implement a random sampling design within a defined boundary of any area of interest. Users can choose to draw a geometric feature or upload a shapefile',
+            style: {
+                fontSize: '.9vw',
+                fontWeight: 'normal'
+            },
+        }),
+        ui.Label({
+          value: 'Step 1 - Select "Draw Study Area" or "Upload Shapefile"',
+          style: {
+          fontSize:'1.1 vw',
+          fontWeight: 'bold'
+          }
+        }),
+        
+    ]);
+    // Add intro panel to the main panel.
+    panel.add(intro);
+}
+// Create main panel.
+var panel = ui.Panel();
+// Set the width and font style for the main panel.
+panel.style().set({
+    width: '35%',
+    fontSize: '1vw',
+    fontWeight: 'bold'
+});
+
+// Add the main panel to the UI root.
+ui.root.insert(1, panel);
+panelcreate();
+
+// this code adds the ability to select draw a shape or upload a shapefile
+// Add a panel for "Step 1" draw a polygon, or upload a file to assets
+// Adding in the "DRAW" and "UPLOAD" button
+var step1lab = ui.Label({
+        value:'Choose from the below options',
+        style: {
+            fontSize: '2vmin',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+        
+var drawlabel = ui.Label({
+          value: 'To "DRAW" your study area, select the "Draw a Shape" icon from the tools on the top left corner of the screen. Click on the map to place a vertice, sequentially drawing the boundary of your study area. Click on your initial vertex to "Close" the boundary' ,
+          style: {
+          fontSize:'0.9 vw',
+          fontWeight: 'normal'
+          }
+        });
+        
+var uploadlabel =   ui.Label({
+          value: 'To "UPLOAD" your study area boundary, select "Assets" from the menu tab -> Select "New" -> upload shapefile. Lastly, import the shapefile into the script using the "Import to script" button',
+          style: {
+          fontSize:'1.1 vw',
+          fontWeight: 'normal'
+          }
+        });
+// Variables for draw a geometry button
+        
+var selectuploadtype = ui.Select({
+  items:['Draw Study Area', 'Upload Shapefile'],
+onChange: function() {
+      if (selectuploadtype.getValue() == 'Draw Study Area'){
+      panel.add(drawlabel)
+      }
+      else {
+      panel.add(uploadlabel)
+    }
+}
+})
+panel.add(selectuploadtype)
+var step2label = ui.Label({ 
+          value: 'Step 2 - Calcuate carbon stock statistics (optional)',
+          style: {
+          fontSize:'1.2 vw',
+          fontWeight: 'bold'
+          }}
+          );
+panel.add(step2label);
+
+var drawbutton = ui.Button({
+  label: 'Calculate Statistics',
+  onClick: function() {
+    if (selectuploadtype.getValue() == 'Draw Study Area'){
+      var priordatalabel = ui.Label({ 
+          value: 'Summary of Prior Data',
+          style: {
+          fontSize:'1.5vw',
+          fontWeight: 'normal'
+          }}
+          )
+var studyarea = geometry;
+Map.centerObject(studyarea);
+Map.addLayer(studyarea);
+var polygonArea = geometry.area({'maxError': 1});
+var polygonArea2= ee.Number(polygonArea).format('%.2f');
+print("Study Area Size (m^2)", polygonArea);
+var meanDictsc = soilcarbon.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: geometry,
+  scale: 90
+});
+var meansc = meanDictsc.get('b1');
+var meanscp = ee.Number(meansc).format('%.2f')
+print('Mean soil carbon stock', meansc);
+var totalsoil = ee.Number(meansc).multiply(ee.Number(polygonArea)).format('%.2f');
+var meanDictfc = forestc.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: geometry,
+  scale: 90
+});
+var meanfc = meanDictfc.get('b1');
+var meanfcp = ee.Number(meanfc).format('%.2f');
+print('Mean forest carbon stock', meanfc);
+var totalforest = ee.Number(meanfc).multiply(ee.Number(polygonArea)).format('%.2f');
+var stddevDictsc = soilcarbon.reduceRegion({
+  reducer: ee.Reducer.stdDev(),
+  geometry: geometry,
+  scale: 90
+});
+var stddevDictfc = forestc.reduceRegion({
+  reducer: ee.Reducer.stdDev(),
+  geometry: geometry,
+  scale: 90
+});
+var stddevsc = stddevDictsc.get('b1');
+var stddevscp = ee.Number(stddevsc).format('%.2f');
+print('Std soil carbon stock', stddevsc);
+var stddevfc = stddevDictfc.get('b1');
+var stddevfcp = ee.Number(stddevfc).format('%.2f');
+print('Std forest carbon stock', stddevfc);
+
+var studyareapanel =  ui.Label({
+        value:'Study area size - ' 
+        + polygonArea2.getInfo() + ' (m^2) ',
+        style: {
+            fontSize: '1.2vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+
+var soilcarbonpanel1 =  ui.Label({
+        value:'Mean soil carbon stock - ' 
+        + meanscp.getInfo() + ' (kg/m^2) ',
+        style: {
+            fontSize: '1.2vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+// Add the inspector panel to the default map.
+var soilcarbonpanel2 =  ui.Label({
+        value:' (StD +/- ' +
+        stddevscp.getInfo() + ' )',
+        style: {
+            fontSize: '1.0vw',
+            fontWeight: 'normal',
+            textAlign: 'center',
+            margin: '0px 0px 0px 0px'
+        }});
+
+
+panel.add(priordatalabel);
+panel.add(studyareapanel);
+panel.add(soilcarbonpanel1);
+panel.add(soilcarbonpanel2);
+
+var forestcarbonpanel1 =  ui.Label({
+        value:'Mean forest carbon stock - ' 
+        + meanfcp.getInfo()+ ' (kg/m^2)',
+        style: {
+            fontSize: '1.2vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+        
+var forestcarbonpanel2 =  ui.Label({
+        value:'(StD +/- ' 
+        + stddevfcp.getInfo() + ' ) ',
+        style: {
+            fontSize: '1.0vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+        
+panel.add(forestcarbonpanel1);
+panel.add(forestcarbonpanel2);
+
+var forestcarbonpanelT =  ui.Label({
+        value: 'Total forest carbon stock - ' +
+        totalforest.getInfo() + ' (kg) ',
+        style: {
+            fontSize: '1.2vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+        
+var soilcarbonpanelT =  ui.Label({
+        value:'Total soil carbon stock - ' +
+        totalsoil.getInfo() + ' (kg) ',
+        style: {
+            fontSize: '1.2vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+// Add the inspector panel to the default map.
+panel.add(forestcarbonpanelT);
+panel.add(soilcarbonpanelT);
+  }
+  else { 
+    var carbondatalabel2 = ui.Label({ 
+          value: 'Summary of Data',
+          style: {
+          fontSize:'1.5 vw',
+          fontWeight: 'normal'
+          }}
+          )
+    var studyArea = ee.FeatureCollection(table).geometry();
+    var polygonArea2 = studyArea.area({'maxError': 1});
+    var polygonArea3 = ee.Number(polygonArea2).format('%2f');
+    print("Study Area Size (m^2)", polygonArea2);
+    var meanDictsc2 = soilcarbon.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: studyArea,
+  scale: 90
+});
+Map.centerObject(studyArea);
+Map.addLayer(studyArea);
+var meansc2 = meanDictsc2.get('b1');
+var meansc2p = ee.Number(meansc2).format('%.2f');
+print('Mean soil carbon stock', meansc2);
+var totalsoil2 = ee.Number(meansc2).multiply(ee.Number(polygonArea2)).format('%.2f');
+var meanDictfc2 = forestc.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: studyArea,
+  scale: 90
+});
+var meanfc2 = meanDictfc2.get('b1');
+var meanfc2p = ee.Number(meanfc2).format('%.2f');
+print('Mean forest carbon stock', meanfc2);
+var totalforest2 = ee.Number(meanfc2).multiply(ee.Number(polygonArea2)).format('%.2f');
+var stddevDictsc2 = soilcarbon.reduceRegion({
+  reducer: ee.Reducer.stdDev(),
+  geometry: studyArea,
+  scale: 90
+});
+var stddevDictfc2 = forestc.reduceRegion({
+  reducer: ee.Reducer.stdDev(),
+  geometry: studyArea,
+  scale: 90
+});
+var stddevsc2 = stddevDictsc2.get('b1');
+var stddevsc2p = ee.Number(stddevsc2).format('%.2f');
+print('Std soil carbon stock', stddevsc2);
+var stddevfc2 = stddevDictfc2.get('b1');
+var stddevfc2p = ee.Number(stddevfc2).format('%.2f');
+print('Std forest carbon stock', stddevfc2);
+var studyareapanel2 =  ui.Label({
+        value:'Study area size - ' 
+        + polygonArea2.getInfo() + ' (m^2) ',
+        style: {
+            fontSize: '1.2vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+panel.add(carbondatalabel2);
+panel.add(studyareapanel2);
+
+var soilcarbonpanel3 =  ui.Label({
+        value:'Mean soil carbon stock - ' 
+        + meansc2p.getInfo() + ' (kg/m^2) ',
+        style: {
+            fontSize: '1.2vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+// Add the inspector panel to the default map.
+var soilcarbonpanel4 =  ui.Label({
+        value:' (StD +/- ' +
+        stddevsc2p.getInfo() + ' )',
+        style: {
+            fontSize: '1.0vw',
+            fontWeight: 'normal',
+            textAlign: 'center',
+            margin: '0px 0px 0px 0px'
+        }});
+
+panel.add(soilcarbonpanel3);
+panel.add(soilcarbonpanel4);
+
+var forestcarbonpanel3 =  ui.Label({
+        value:'Mean forest crbon stock - ' 
+        + meanfc2p.getInfo()+ ' (kg/m^2)',
+        style: {
+            fontSize: '1.2vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+        
+var forestcarbonpanel4 =  ui.Label({
+        value:'(StD +/- ' 
+        + stddevfc2p.getInfo() + ' ) ',
+        style: {
+            fontSize: '1.0vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+        
+panel.add(forestcarbonpanel3);
+panel.add(forestcarbonpanel4);
+
+var forestcarbonpanelT2 =  ui.Label({
+        value: 'Total forest carbon stock - ' +
+        totalforest2.getInfo() + ' (Kg) ',
+        style: {
+            fontSize: '1.2vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+        
+var soilcarbonpanelT2 =  ui.Label({
+        value:'Total soil carbon stock - ' +
+        totalsoil2.getInfo() + ' (Kg) ',
+        style: {
+            fontSize: '1.2vw',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+// Add the inspector panel to the default map.
+panel.add(forestcarbonpanelT2);
+panel.add(soilcarbonpanelT2);
+  }}
+});
+
+panel.add(drawbutton);
+
+//// Adding sources to the panel
+function referencecreate() {
+    var referenceZero = ui.Label({
+        value: 'Data Source:',
+        style: {
+            color: 'black',
+            fontWeight: 'bold',
+            textAlign: 'center'
+        },
+    });
+    var referenceOne = ui.Label({
+        value: 'Carbon stock (kg/m^2) at 250m resolution for forest and soils',
+        style: {
+            color: 'black',
+            fontWeight: 'bold',
+            textAlign: 'center'
+        },
+        targetUrl: 'https://doi.org/10.1029/2021GB007213'
+    });
+
+panel.add(referenceZero);
+panel.add(referenceOne);
+}
+
+referencecreate();
+///// Add reference to the panel.
+
+///////// Step 3 input sample size
+
+//var line3 = ui.Label({
+  //  value: '______________________________________________________________',
+    //style: {fontWeight: 'bold',  color: '4A997E'},
+  //});
+//panel.add(line3)
+/// 
+var step3 = ui.Label({
+            value: 'Step 3 - Determine sample size and perfrom random sampling',
+            style: {
+                fontSize: '1.1vw',
+                fontWeight: 'bold',
+                textAlign: 'left'
+            }
+});
+panel.add(step3)
+/// Add textbox so user can input the sample size
+
+
+///// Calulate the recomended sample number based on area size, estimated mean and standard deviation
+
+// Add caviet that plot size for sampling is estiamated at 400 m^2 and in conformity with forestry survey data - look at blue carbon guide for alternative sampling design strategy
+
+var alphalabel = ui.Label({
+  
+})
+
+var textboxaccuracy = ui.Textbox({
+    placeholder: '10',
+    value: '10',
+});
+
+var textboxprecision = ui.Textbox({
+    placeholder: '10',
+    value: '10'
+});
+
+var accuracylabel = ui.Label({
+  value: 'In the box below, you can you enter your desired "ACCURACY". This value is the percent above and below the actual or "true" value being measured that is acceptable to meet your desired goals. The default is set to 10%, but some protocols require a minumum 5% range, which in that case, enter 5 below',
+            style: {
+                fontSize: '1.1vw',
+                fontWeight: 'normal',
+                textAlign: 'left'
+            }
+})
+var alphalabel = ui.Label({
+  value: 'In the box below, you can you enter your desired "PRECISION" or Alpha value. This value is the percent probability that your value will be in your desired "accuracy" entered above. The default is set to 10%, but some protocols require a minumum 5% probability, which in that case, enter 5 below',
+            style: {
+                fontSize: '1.1vw',
+                fontWeight: 'normal',
+                textAlign: 'left'
+            }
+})
+panel.add(accuracylabel);
+panel.add(textboxaccuracy);
+panel.add(alphalabel);
+panel.add(textboxprecision);
+
+//// Define input variables
+
+var SampleSizeButton = ui.Button({
+  label: 'Calculate Sample Plot Allocation',
+  onClick: function() {
+    if (selectuploadtype.getValue() == 'Draw Study Area'){
+      var studyarea = geometry.area({'maxError': 1});
+      var meanDictsc = soilcarbon.reduceRegion({
+  reducer: ee.Reducer.mean().unweighted(),
+  geometry: geometry,
+  scale: 90 });
+  var meansc = meanDictsc.get('b1');
+  var meanDictfc = forestc.reduceRegion({
+  reducer: ee.Reducer.mean().unweighted(),
+  geometry: geometry,
+  scale: 90
+});
+var meanfc = meanDictfc.get('b1');
+      var stddevDictsc = soilcarbon.reduceRegion({
+  reducer: ee.Reducer.stdDev(),
+  geometry: geometry,
+  scale: 90
+});
+var stddevDictfc = forestc.reduceRegion({
+  reducer: ee.Reducer.stdDev(),
+  geometry: geometry,
+  scale: 90
+});
+
+var stddevsc = stddevDictsc.get('b1');
+var stddevfc = stddevDictfc.get('b1');
+var accuracy = textboxaccuracy.getValue();
+var accuracy1 = ee.Number.parse(accuracy).divide(100);
+var alpha = textboxprecision.getValue();
+var alpha1 = ee.Number.parse(alpha).divide(100);
+var E = ee.Number(alpha1).multiply(meanfc)
+var E2 = ee.Number(alpha1).multiply(meansc)
+var zstatvar = {c1: accuracy1, z: 2.41, y: -10.9, x: 37.7, u: 2, w: 57.9, p: 3};
+var zstat = ee.Number.expression('z + (y * c1) + (x * c1 ** 2) - (w * c1 ** p)', zstatvar);
+    var variables = {a: studyarea, b: meansc, c: meanfc, d: stddevsc, e: stddevfc,f: accuracy1, g: alpha1, h: 400,i: 400, j: 2, k: zstat, l: E, m: E2};
+    var a1 = ee.Number.expression('((a / h) * e) ** j', variables)
+    var a2 = ee.Number.expression('(((a / h) * (l / k)) ** j)', variables)
+    var a3 = ee.Number.expression('(a / h) * (e ** j)', variables)
+    var a4 = ee.Number.expression('((a / i) * d) ** j', variables)
+    var a5 = ee.Number.expression('(((a / i) * (m / k)) ** j)', variables)
+    var a6 = ee.Number.expression('(a / i) * (d ** j)', variables)
+    var variables2 = {b1: a1, b2: a2, b3: a3, b4: a4, b5: a5, b6: a6}
+    var samplesizefc = ee.Number.expression('b1 / (b2 + b3)', variables2);
+    var samplesizesc = ee.Number.expression('b4 / (b5 + b6)', variables2);
+    var samplesizefclabel = ui.Label({
+  value: 'Recomended Sample Size - ' + samplesizefc.getInfo(),
+            style: {
+                fontSize: '1.5vw',
+                fontWeight: 'bold',
+                textAlign: 'left'
+            }
+}) 
+  print(variables)
+  print(variables2)
+  print(samplesizefc);
+  print(samplesizesc);
+  panel.add (samplesizefclabel);
+    
+  }
+  else {
+  var studyArea = ee.FeatureCollection(table).geometry();
+  var polygonArea2 = studyArea.area({'maxError': 1});
+  var meanDictsc2 = soilcarbon.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: studyArea,
+  scale: 90
+});
+var meansc2 = meanDictsc2.get('b1');
+var meanDictfc2 = forestc.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: studyArea,
+  scale: 90
+});
+var meanfc2 = meanDictfc2.get('b1');
+var stddevDictsc2 = soilcarbon.reduceRegion({
+  reducer: ee.Reducer.stdDev(),
+  geometry: studyArea,
+  scale: 90
+});
+var stddevDictfc2 = forestc.reduceRegion({
+  reducer: ee.Reducer.stdDev(),
+  geometry: studyArea,
+  scale: 90
+});
+var stddevsc2 = stddevDictsc2.get('b1');
+var stddevfc2 = stddevDictfc2.get('b1');
+var accuracy2 = textboxaccuracy.getValue();
+var accuracy12 = ee.Number.parse(accuracy2).divide(100);
+var alpha2 = textboxprecision.getValue();
+var alpha12 = ee.Number.parse(alpha2).divide(100);
+var E21 = ee.Number(alpha12).multiply(meanfc2)
+var E22 = ee.Number(alpha12).multiply(meansc2)
+var zstatvar2 = {c1: accuracy12, z: 2.41, y: -10.9, x: 37.7, u: 2, w: 57.9, p: 3};
+var zstat2 = ee.Number.expression('z + (y * c1) + (x * c1 ** 2) - (w * c1 ** p)', zstatvar2);
+    var variables22 = {a: polygonArea2, b: meansc2, c: meanfc2, d: stddevsc2, e: stddevfc2, f: accuracy12, g: alpha12, h: 400,i: 400, j: 2, k: zstat2, l: E21, m: E22};
+    var a12 = ee.Number.expression('((a / h) * e) ** j', variables22)
+    var a22 = ee.Number.expression('(((a / h) * (l / k)) ** j)', variables22)
+    var a32 = ee.Number.expression('(a / h) * (e ** j)', variables22)
+    var a42 = ee.Number.expression('((a / i) * d) ** j', variables22)
+    var a52 = ee.Number.expression('(((a / i) * (m / k)) ** j)', variables22)
+    var a62 = ee.Number.expression('(a / i) * (d ** j)', variables22)
+    var variables222 = {b1: a12, b2: a22, b3: a32, b4: a42, b5: a52, b6: a62}
+    var samplesizefc2 = ee.Number.expression('b1 / (b2 + b3)', variables222);
+    var samplesizesc2 = ee.Number.expression('b4 / (b5 + b6)', variables222);
+    var samplesizefclabel2 = ui.Label({
+      value: 'Recomended Sample Size - ' + samplesizefc2.getInfo(),
+            style: {
+                fontSize: '1.5vw',
+                fontWeight: 'bold',
+                textAlign: 'left'
+            }
+    });
+  print(variables22);
+  print(variables222);
+  print(samplesizefc2);
+  print(samplesizesc2);
+  panel.add (samplesizefclabel2);
+}
+}
+});
+
+panel.add(SampleSizeButton);
+
+
+
+////////////////////// 
+// Export Sampling points 
+
+
+  var step3lab = ui.Label({
+        value:'Below you can enter any number of points you wish to have as your random sample number. This can reflect a value based on budget or capacity constraints, and any considerations. If you wish to get an estimate of sample points based on the desired range of accuracy and precision, select "Calculate Sample Plot Allocation" above and enter the output for recommended sample size below, then hit "Enter" on your keyboard to view sample locations on the map.',
+        style: {
+            fontSize: '2vmin',
+            fontWeight: 'normal',
+            textAlign: 'left',
+            margin: '0px 0px 0px 0px'
+        }});
+      
+  var textbox = ui.Textbox({
+    placeholder: 'Enter sample size here',
+   onChange: function(text) {
+     if (selectuploadtype.getValue() === 'Draw Study Area'){
+    var samplesize = ee.Number.parse(textbox.getValue());
+    print(samplesize);
+var randompoints = ee.FeatureCollection.randomPoints(geometry.buffer(0.1), samplesize, 0, 1);
+Map.addLayer(randompoints,  {color: 'black'}, 'Random Sampling Points');
+var exportbuttonlab = ui.Label({
+            value: 'Step 4 - To export the location points, click the button below',
+            style: {
+                fontSize: '1.5vw',
+                fontWeight: 'bold',
+                textAlign: 'left'
+            }
+})
+var button = ui.Button({
+  label: 'Export Sample Locations',
+  onClick: function() {
+    Export.table.toDrive({
+  collection:randompoints,
+  description: 'Sampleplotlocations',
+  folder: "GEE_WorkflowFiles"
+      });
+    }
+      });
+panel.add(exportbuttonlab).add(button);
+     }
+     else {
+  var samplesize2 = ee.Number.parse(textbox.getValue());
+    print(samplesize2);
+  var studyAreaa = ee.FeatureCollection(table).geometry();
+  var randompoints2 = ee.FeatureCollection.randomPoints(studyAreaa.buffer(0.1), samplesize2, 0, 1);
+  Map.addLayer(randompoints2,  {color: 'black'}, 'Random Sampling Points');
+  var exportbuttonlab2 = ui.Label({
+            value: 'Step 4 - To export the location points, click the button below',
+            style: {
+                fontSize: '1.5vw',
+                fontWeight: 'bold',
+                textAlign: 'left'
+            }
+})
+var button2 = ui.Button({
+  label: 'Export Sample Locations',
+  onClick: function() {
+    Export.table.toDrive({
+  collection:randompoints2,
+  description: 'Sampleplotlocations',
+  folder: "GEE_WorkflowFiles"
+      });
+}
+})
+panel.add(exportbuttonlab2).add(button2);
+     }
+   }
+  });
+  
+panel.add(step3lab).add(textbox)
+
+
+
+/// Adding the function that updates geometry upon use of drawing tools
+///tbd
